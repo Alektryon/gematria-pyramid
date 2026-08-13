@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gematria Inverted Pyramid — Qabbala / Synx</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel-2:#1c2230; --border:#30363d;
+    --text:#c9d1d9; --muted:#8b949e; --accent:#58a6ff; --hl:#ff3b30;
+    --cell-bg:#21262d; --cell-bg-hl:rgba(255,59,48,.12);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:28px 18px 60px; background:var(--bg); color:var(--text);
+    font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,"Liberation Mono",monospace;
+    line-height:1.5;
+  }
+  h1{font-size:1.35rem;margin:0 0 4px;font-weight:600;color:#fff;letter-spacing:.2px}
+  .subtitle{color:var(--muted);font-size:.82rem;margin:0 0 22px}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:18px 20px; max-width:980px; margin:0 auto 22px;
+  }
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  #phrase{width:520px;max-width:60vw;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:6px;color:var(--text);padding:9px 11px;font-family:inherit;font-size:.9rem}
+  #phrase:focus{outline:none;border-color:var(--accent)}
+  select,#btn{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);
+    padding:9px 11px;font-family:inherit;font-size:.85rem;cursor:pointer;
+  }
+  #btn{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+  #btn:hover{filter:brightness(1.08)}
+  .hint{display:block;font-size:.76rem;color:var(--muted);margin:0 0 14px}
+  #out{
+    margin-top:18px; overflow-x:auto; padding:18px 10px 6px; min-height:60px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+  }
+  .pyramid{display:inline-grid; margin:0 auto; padding:10px 14px; }
+  .pcell{
+    display:flex; align-items:center; justify-content:center;
+    padding:9px 12px; margin:2px; border-radius:6px;
+    background:var(--cell-bg); border:1px solid transparent;
+    transition:background .12s, color .12s, border-color .12s, transform .12s;
+    cursor:default; min-width:48px; user-select:none;
+    font-size:1rem; font-weight:600; color:#e6edf3; font-variant-numeric:tabular-nums;
+  }
+  .pcell .val{display:block}
+  /* Topmost row: word label stacked above its value */
+  .pcell.base{flex-direction:column; gap:3px; min-width:64px; padding:9px 14px;}
+  .pcell.base .src{
+    font-size:.82rem; font-weight:700; color:#fff;
+    max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .pcell.base .val{font-size:1rem;color:var(--muted)}
+  .pcell.hover,
+  .pcell.hover .src,
+  .pcell.hover .val,
+  .pcell.related,
+  .pcell.related .src,
+  .pcell.related .val{
+    color:var(--hl) !important;
+    background:var(--cell-bg-hl) !important;
+    border-color:var(--hl) !important;
+  }
+  .pcell.related{transform:scale(1.04)}
+  .empty{color:var(--muted);font-size:.85rem;text-align:center;padding:24px}
+  .legend{font-size:.74rem;color:var(--muted);margin-top:14px;text-align:center}
+  .legend b{color:var(--hl)}
+  .grid-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+  <h1>Gematria · Inverted Pyramid</h1>
+  <p class="subtitle">Inverted‑pyramid Gematria · choose a cipher · hover any cell to highlight the source totals it sums</p>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label for="cipher">Cipher</label>
+        <select id="cipher">
+          <option value="aq" selected>Alphanumeric Qabbala</option>
+          <option value="synx">Synx</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1">
+        <label for="phrase">Phrase</label>
+        <input id="phrase" type="text" value="LET THERE BE LIGHT" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="btn">Calculate</button>
+      </div>
+    </div>
+    <span class="hint">Non‑alphanumeric characters are ignored. Separate words with spaces.</span>
+
+    <div id="out"><div class="empty">Enter a phrase and press Calculate.</div></div>
+    <p class="legend">Hover a cell → that cell and the <b>base‑row words</b> that sum to it light up in <b>red</b>.</p>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- Ciphers ----
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  // Both ciphers map the 36 alphanumeric characters (0-9, A-Z) to numeric values.
+  //
+  // Alphanumeric Qabbala: continuous base-36 notation.
+  //   0->0 ... 9->9, A->10 ... Z->35
+  //
+  // Synx: the 36 divisors of 1260, assigned in ascending order to the 36 chars.
+  //   0->1 (1st divisor), 1->2, ... , Z->1260 (36th/last divisor).
+  var AQ = [];
+  for (var i = 0; i < 36; i++) AQ[i] = i; // 0..35
+
+  var SYNX = [1,2,3,4,5,6,7,9,10,12,14,15,18,20,21,28,30,35,36,42,45,
+              60,63,70,84,90,105,126,140,180,210,252,315,420,630,1260];
+
+  function charIndex(ch){
+    var c = ch.toUpperCase();
+    if(c >= '0' && c <= '9') return c.charCodeAt(0) - 48;       // 0-9 -> index 0..9
+    if(c >= 'A' && c <= 'Z') return c.charCodeAt(0) - 65 + 10;  // A-Z -> index 10..35
+    return -1; // non-alphanumeric -> ignored
+  }
+
+  function charVal(ch, cipher){
+    var idx = charIndex(ch);
+    if(idx < 0) return null;
+    return (cipher === 'synx') ? SYNX[idx] : AQ[idx];
+  }
+
+  // Build base tokens (one per word). Returns array of {src, val}.
+  function buildTokens(text, cipher){
+    var tokens = [];
+    text.split(/\s+/).forEach(function(w){
+      var sum = 0, has = false;
+      for(var i=0;i<w.length;i++){
+        var v = charVal(w[i], cipher);
+        if(v !== null){ sum += v; has = true; }
+      }
+      if(has) tokens.push({ src: w.toUpperCase(), val: sum });
+    });
+    return tokens;
+  }
+
+  // ---- Inverted Pyramid (sliding window of growing length) ----
+  // Row r has (n - r) cells. Cell[r][c] = sum of base tokens c .. c+r (inclusive).
+  // It is "inverted": widest row on top, apex (grand total) at the bottom.
+  function buildPyramid(tokens){
+    var n = tokens.length;
+    var rows = [];
+    if(n === 0) return rows;
+    for(var r=0; r<n; r++){
+      var row = [];
+      for(var c=0; c < n-r; c++){
+        var s = 0;
+        for(var k=c; k<=c+r; k++) s += tokens[k].val;
+        row.push({ r:r, c:c, val:s, range:[c, c+r] });
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  // ---- Render with a single CSS grid; alignment = triangle via empty leading cells ----
+  function render(tokens, rows, outEl){
+    outEl.innerHTML = '';
+    if(tokens.length === 0){
+      outEl.innerHTML = '<div class="empty">No alphanumeric characters found.</div>';
+      return;
+    }
+    var n = tokens.length;
+    var out = outEl;
+    out.innerHTML = '';
+
+    var grid = document.createElement('div');
+    grid.className = 'pyramid';
+
+    // Each logical cell spans 2 grid columns so children can be centered between parents.
+    var cols = n * 2;
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(34px, auto))';
+    grid.style.gridAutoRows = 'minmax(48px, auto)';
+
+    // We render rows top -> bottom. Row r has (n-r) cells.
+    // Cell c in row r occupies grid columns (2c+1) .. (2c+2)  => centered at 2c+1.5
+    // Its parent (row r-1, cell c) is centered at 2c+1.5 ; neighbor parent (r-1,c+1) at 2c+3.5.
+    // Child (row r, c) sits exactly between them at 2c+2.5 -> shift left by one column each row.
+    // Implementation: leading empty cell per row = r, then cells with colSpan 2.
+    for(var r=0; r<rows.length; r++){
+      var row = rows[r];
+      for(var c=0; c<row.length; c++){
+        var cell = row[c];
+        if(c === 0){
+          // leading spacers: r empty 1-col cells
+          for(var s=0;s<r;s++){
+            var sp = document.createElement('div');
+            grid.appendChild(sp);
+          }
+        }
+        var el = document.createElement('div');
+        el.className = 'pcell' + (r === 0 ? ' base' : '');
+        el.dataset.r = r;
+        el.dataset.c = c;
+        el.style.gridColumnStart = String(2*c + 1 + r);
+        el.style.gridColumnEnd   = String(2*c + 3 + r); // span 2
+
+        if(r === 0){
+          var srcSpan = document.createElement('span');
+          srcSpan.className = 'src';
+          srcSpan.textContent = tokens[c].src;
+          el.appendChild(srcSpan);
+        }
+        var valSpan = document.createElement('span');
+        valSpan.className = 'val';
+        valSpan.textContent = String(cell.val);
+        el.appendChild(valSpan);
+
+        (function(el, cell, n){
+          el.addEventListener('mouseenter', function(){
+            var cells = grid.querySelectorAll('.pcell');
+            cells.forEach(function(x){
+              var xr = +x.dataset.r, xc = +x.dataset.c;
+              var hov = (xr === cell.r && xc === cell.c);
+              // Only the hovered cell and the BASE-row cells (row 0) whose index
+              // falls within the hovered cell's source range are highlighted.
+              // Intermediary rows are NOT highlighted.
+              var rel = !hov &&
+                        xr === 0 &&
+                        (xc >= cell.range[0]) &&
+                        (xc <= cell.range[1]);
+              if(hov) x.classList.add('hover');
+              else if(rel) x.classList.add('related');
+            });
+          });
+          el.addEventListener('mouseleave', function(){
+            grid.querySelectorAll('.pcell').forEach(function(x){
+              x.classList.remove('hover','related');
+            });
+          });
+        })(el, cell, n);
+
+        grid.appendChild(el);
+      }
+    }
+    outEl.appendChild(grid);
+  }
+
+  function run(){
+    var cipher = document.getElementById('cipher').value;
+    var text   = document.getElementById('phrase').value;
+    var tokens = buildTokens(text, cipher);
+    var rows   = buildPyramid(tokens);
+    render(tokens, rows, document.getElementById('out'));
+  }
+
+  document.getElementById('btn').addEventListener('click', run);
+  document.getElementById('phrase').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') run();
+  });
+  document.getElementById('cipher').addEventListener('change', run);
+
+  // initial render with default values
+  run();
+})();
+</script>
+</body>
+</html>
